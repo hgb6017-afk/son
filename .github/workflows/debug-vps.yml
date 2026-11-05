@@ -1,48 +1,31 @@
-name: VPS Linux qua Ngrok
+name: VPS Linux Free
 
 on:
   workflow_dispatch:
-    inputs:
-      ngrok_token:
-        description: '3EneZvGizAFoVjNKscqOh6b32L5_5UnuPrWTmFrtGJmq41eWU'
-        required: true
-      vps_password:
-        description: 'baohg6017'
-        required: true
-        default: '123456'
 
 jobs:
-  build:
+  run-vps:
     runs-on: ubuntu-latest
     steps:
-      - name: Khoi tao Ngrok va mo cong SSH
+      - name: Khoi tao VPS va mo tunnel SSH
         run: |
-          # Cai dat Ngrok
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update -qq && sudo apt install -qq -y ngrok
+          # 1. Cai dat mat khau cho tai khoan runner va root
+          echo "runner:123456" | sudo chpasswd
+          echo "root:123456" | sudo chpasswd
 
-          # Cau hinh mat khau root/runner
-          echo "runner:${{ github.event.inputs.vps_password }}" | sudo chpasswd
-          echo "root:${{ github.event.inputs.vps_password }}" | sudo chpasswd
+          # 2. Cho phep dang nhap SSH bang mat khau
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo systemctl restart ssh
 
-          # Kich hoat Ngrok token va mo tunnel SSH
-          ngrok config add-authtoken ${{ github.event.inputs.ngrok_token }}
-          ngrok tcp 22 --log=stdout > ngrok.log &
-          sleep 5
-
-          # Lay thong tin ket noi
-          INFO=$(curl -s http://localhost:4040/api/tunnels | grep -o 'tcp://[^"]*')
-          HOST=$(echo $INFO | cut -d'/' -f3 | cut -d':' -f1)
-          PORT=$(echo $INFO | cut -d':' -f3)
+          # 3. Tai Bore (cong cu tunnel khong can the, khong can dang ky)
+          curl -sL https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz | tar -xz
+          chmod +x ./bore
 
           echo "=================================================="
-          echo "LENH KET NOI SSH:"
-          echo "ssh runner@$HOST -p $PORT"
-          echo "Mat khau: ${{ github.event.inputs.vps_password }}"
+          echo "DA KHOI TAO XONG! XEM CONG KET NOI O DONG DUOI:"
+          echo "Mat khau dang nhap: 123456"
           echo "=================================================="
 
-          # Giu may ao chay
-          while pgrep -x "ngrok" > /dev/null; do
-            sleep 30
-          done
+          # 4. Mo cong ket noi qua bore.pub
+          ./bore local 22 --to bore.pub
