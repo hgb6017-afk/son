@@ -1,0 +1,48 @@
+name: VPS Linux qua Ngrok
+
+on:
+  workflow_dispatch:
+    inputs:
+      ngrok_token:
+        description: '3EneZvGizAFoVjNKscqOh6b32L5_5UnuPrWTmFrtGJmq41eWU'
+        required: true
+      vps_password:
+        description: 'baohg6017'
+        required: true
+        default: '123456'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Khoi tao Ngrok va mo cong SSH
+        run: |
+          # Cai dat Ngrok
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update -qq && sudo apt install -qq -y ngrok
+
+          # Cau hinh mat khau root/runner
+          echo "runner:${{ github.event.inputs.vps_password }}" | sudo chpasswd
+          echo "root:${{ github.event.inputs.vps_password }}" | sudo chpasswd
+
+          # Kich hoat Ngrok token va mo tunnel SSH
+          ngrok config add-authtoken ${{ github.event.inputs.ngrok_token }}
+          ngrok tcp 22 --log=stdout > ngrok.log &
+          sleep 5
+
+          # Lay thong tin ket noi
+          INFO=$(curl -s http://localhost:4040/api/tunnels | grep -o 'tcp://[^"]*')
+          HOST=$(echo $INFO | cut -d'/' -f3 | cut -d':' -f1)
+          PORT=$(echo $INFO | cut -d':' -f3)
+
+          echo "=================================================="
+          echo "LENH KET NOI SSH:"
+          echo "ssh runner@$HOST -p $PORT"
+          echo "Mat khau: ${{ github.event.inputs.vps_password }}"
+          echo "=================================================="
+
+          # Giu may ao chay
+          while pgrep -x "ngrok" > /dev/null; do
+            sleep 30
+          done
